@@ -140,5 +140,21 @@ Once you have downloaded any media resources, they are stored in the local cache
 retrieve the URL to this stored resource, you could call the following method. It will check if the resource 
 is available and give you back the right URL dependent on the underlying runtime (browser / phonegap).
 
-
-
+```java
+// preset with remote path in any case, will be overwritten later in the callback if possible
+imagePanel.setUrl(storageManager.getRemoteResourceUrl(item.getImage())); 
+// invoke the resolver
+storageManager.retrieveResourceUrl(item.getImage(),item.getVersion(), new Callback<String,FileError>()
+{
+   @Override
+   public void onSuccess(String url)
+   {
+     imagePanel.setUrl(url);
+   }
+   @Override
+   public void onFailure(FileError error)
+   {
+     logger.log(Level.WARNING,"Unable to retrieve Image resource " + item.getImage());
+   }
+});
+```
