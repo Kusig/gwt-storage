@@ -92,7 +92,8 @@ Here, the returned JSON object must be mapped into the object itself in order to
 ## Retrieve JSON resources
 This will retrieve the resource from the applications remote location 
 if we run in phonegap, if we run in the browser, it will read always from 
-apps context path.
+apps context path. If the resource was already loaded before and its version and cache timeout
+is valid it will just return the local cached resource. 
 
 ```java
 {
@@ -126,13 +127,27 @@ private Callback<StorageItem, StorageError> getLoadHandler()
 ```
 
 ## Read JSON Resoures from LocalStorage
+Retrieve the JSON object from the local browser storage (running in browser or phonegap doesn't matter).
+The item will be loaded dependent on its type, its id and the version all given with the Json object in which the result will be given back.
 
+```java
+storageManager.readStorageItemFromLocalStorage(setupItem);
+```
 
 ## Write JSON Resources to LocalStorage
+Write the JSON object to the local browsers storage given the Type of the object, the ID and the version.
 
+```java
+storageManager.writeStorageItemToLocalStorage(setupItem);
+```
 
 ## Retrieve media resources
+This downloads the resource (eg. image or video) from the relative url given. It checks with the version if we have 
+the resource already in the local cached by comparing the version first and doesn't download if existing already.
 
+```java
+storageManager.addResourceToCache(relativeUrl,itemVersion);
+```
 
 
 ## Resolve cached files URL reference
