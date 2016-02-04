@@ -1,5 +1,7 @@
 package ch.gbrain.gwtstorage.model;
 
+import com.googlecode.gwtphonegap.client.file.FileDownloadCallback;
+
 /*
  * #%L
  * GwtStorage
@@ -27,11 +29,13 @@ public class StorageResource
 
   String resourceUrl;
   Integer version;
+  FileDownloadCallback downloadNotification;
 
-  public StorageResource(String url, Integer version)
+  public StorageResource(String url, Integer version, FileDownloadCallback downloadNotification)
   {
     this.resourceUrl = url;
     this.version = version;
+    this.downloadNotification = downloadNotification;
   }
 
   public String getResourceIdKey()
@@ -80,4 +84,9 @@ public class StorageResource
     return version;
   }
 
+  public FileDownloadCallback getDownloadNotification()
+  {
+    return downloadNotification;
+  }
+  
 }

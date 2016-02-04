@@ -19,11 +19,13 @@
   #L%
   -->
 
-<!DOCTYPE module PUBLIC "-//Google Inc.//DTD Google Web Toolkit 2.7.0//EN" "http://google-web-toolkit.googlecode.com/svn/tags/2.7.0/distro-source/core/src/gwt-module.dtd">
-<module>
-	<inherits name="com.google.gwt.user.User" />
-	<inherits name='com.googlecode.gwtphonegap.PhoneGap' />
-	<source path="manager" />
-	<source path="model" />
-	<entry-point class="ch.gbrain.gwtstorage.manager.GwtStorage"></entry-point>
+<module rename-to="testapp">
+    
+  <inherits name="org.fusesource.restygwt.RestyGWT"/>  
+  <inherits name="ch.gbrain.gwtstorage.gwtstoragemanager"/>
+  
+  <source path="test" />
+  <source path="model" />
+ 
+   
 </module>

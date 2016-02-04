@@ -73,6 +73,12 @@
 			<artifactId>restygwt</artifactId>
 			<version>2.0.3</version>
 		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -150,21 +156,15 @@
 				<configuration>
 					<style>OBF</style>
 					<modules>
-                      <module>ch.gbrain.gwtstorage.gwtstoragemanager</module>
-                    </modules>
+						<module>ch.gbrain.gwtstorage.gwtstoragemanager</module>
+					</modules>
 				</configuration>
 				<executions>
 					<execution>
-						<id>gwt-compile</id>
-						<phase>compile</phase>
 						<goals>
 							<goal>compile</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>gwt-resources</id>
-						<goals>
 							<goal>resources</goal>
+							<goal>test</goal>
 						</goals>
 					</execution>
 				</executions>

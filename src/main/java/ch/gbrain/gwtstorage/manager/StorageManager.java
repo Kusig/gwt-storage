@@ -20,9 +20,7 @@ package ch.gbrain.gwtstorage.manager;
  * #L%
  */
 
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -30,11 +28,13 @@ import org.fusesource.restygwt.client.JsonCallback;
 import org.fusesource.restygwt.client.Method;
 import org.fusesource.restygwt.client.Resource;
 
+import ch.gbrain.gwtstorage.model.StorageInfo;
 import ch.gbrain.gwtstorage.model.StorageItem;
 import ch.gbrain.gwtstorage.model.StorageResource;
 
 import com.google.gwt.core.client.Callback;
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.i18n.shared.DateTimeFormat;
 import com.google.gwt.i18n.shared.DateTimeFormat.PredefinedFormat;
 import com.google.gwt.json.client.JSONValue;
@@ -47,15 +47,10 @@ import com.googlecode.gwtphonegap.client.file.FileCallback;
 import com.googlecode.gwtphonegap.client.file.FileDownloadCallback;
 import com.googlecode.gwtphonegap.client.file.FileEntry;
 import com.googlecode.gwtphonegap.client.file.FileError;
-import com.googlecode.gwtphonegap.client.file.FileObject;
 import com.googlecode.gwtphonegap.client.file.FileReader;
 import com.googlecode.gwtphonegap.client.file.FileSystem;
-import com.googlecode.gwtphonegap.client.file.FileTransfer;
-import com.googlecode.gwtphonegap.client.file.FileTransferError;
-import com.googlecode.gwtphonegap.client.file.FileTransferProgressEvent;
 import com.googlecode.gwtphonegap.client.file.FileWriter;
 import com.googlecode.gwtphonegap.client.file.Flags;
-import com.googlecode.gwtphonegap.client.file.Metadata;
 import com.googlecode.gwtphonegap.client.file.ReaderCallback;
 import com.googlecode.gwtphonegap.client.file.WriterCallback;
 
@@ -217,8 +212,16 @@ public class StorageManager
   }
 
   private PhoneGap phonegap;
-
+  public PhoneGap getPhonegap()
+  {
+    return phonegap;
+  }
+  
   private Logger logger;
+  public  Logger getLogger()
+  {
+    return logger;
+  }
 
   private Storage localStorage = null;
 
@@ -256,6 +259,7 @@ public class StorageManager
       this.logger = Logger.getLogger("StorageManager");
     }
     getLocalStorage();
+    this.getFileSystem(null);
   }
 
   /**
@@ -729,6 +733,7 @@ public class StorageManager
     return false;
   }
 
+  
   /**
    * Retrieve the FileEntry Reference on the local filesystem of the device if
    * running in a local container eg. Phonegap
@@ -738,60 +743,43 @@ public class StorageManager
    * @param callback is called once the asynch action completed or failed
    * @return false if the asynchronous action invocation failed.
    */
-  private boolean getLocalFileReference(final String directory, final String filename, final boolean create, final FileCallback<FileEntry, StorageError> callback)
+  public boolean getLocalFileReference(final String directory, final String filename, final boolean create, final FileCallback<FileEntry, StorageError> callback)
   {
     try
     {
       if (!phonegap.isPhoneGapDevice()) return false;
-      getFileSystem(new FileCallback<FileSystem, StorageError>()
+      getLocalDirectoryEntry(directory,new FileCallback<DirectoryEntry, StorageError>()
       {
         @Override
-        public void onSuccess(FileSystem entry)
+        public void onSuccess(DirectoryEntry directoryEntry)
         {
-          logger.log(Level.INFO, "getLocalFileReference - Request Local File System Directory for " + directory);
-          final DirectoryEntry root = entry.getRoot();
-          root.getDirectory(directory, new Flags(create, false), new FileCallback<DirectoryEntry, FileError>()
+          directoryEntry.getFile(filename, new Flags(create, false), new FileCallback<FileEntry, FileError>()
           {
             @Override
-            public void onSuccess(DirectoryEntry entry)
+            public void onSuccess(FileEntry entry)
             {
-              logger.log(Level.INFO, "getLocalFileReference - Directory retrieved : " + directory);
-              entry.getFile(filename, new Flags(create, false), new FileCallback<FileEntry, FileError>()
+              logger.log(Level.INFO, "getLocalFileReference - File retrieved : " + filename);
+              if (callback != null)
               {
-                @Override
-                public void onSuccess(FileEntry entry)
-                {
-                  logger.log(Level.INFO, "getLocalFileReference - File retrieved : " + filename);
-                  if (callback != null)
-                  {
-                    callback.onSuccess(entry);
-                  }
-                }
-
-                @Override
-                public void onFailure(FileError error)
-                {
-                  logger.log(Level.SEVERE, "Failure file retrieval " + filename + " " + error.toString());
-                  if (callback != null)
-                  {
-                    callback.onFailure(new StorageError(error));
-                  }
-                }
-              });
+                callback.onSuccess(entry);
+              }
             }
-
             @Override
             public void onFailure(FileError error)
             {
-              logger.log(Level.SEVERE, "Failure directory retrieval " + directory + " : " + error.toString());
+              logger.log(Level.SEVERE, "Failure file retrieval " + filename + " " + error.toString());
+              if (callback != null)
+              {
+                callback.onFailure(new StorageError(error));
+              }
             }
           });
         }
-
         @Override
         public void onFailure(StorageError error)
         {
           logger.log(Level.SEVERE, "Failure filesystem retrieval " + error.toString());
+          callback.onFailure(error);
         }
       });
       return true;
@@ -806,6 +794,9 @@ public class StorageManager
     return false;
   }
 
+  
+  private String lastLocalDirectory = null;
+  private DirectoryEntry lastLocalDirectoryEntry = null;
   /**
    * Retrieve the FileEntry Reference on the local filesystem of the device if
    * running in a local container eg. Phonegap
@@ -820,6 +811,17 @@ public class StorageManager
     try
     {
       if (!phonegap.isPhoneGapDevice()) return false;
+      if (lastLocalDirectory!=null && lastLocalDirectoryEntry !=null)
+      {
+        if (directory.equals(lastLocalDirectory))
+        {
+          if (callback != null)
+          {
+            callback.onSuccess(lastLocalDirectoryEntry);
+          }
+          return true;
+        }
+      }
       getFileSystem(new FileCallback<FileSystem, StorageError>()
       {
         @Override
@@ -833,6 +835,8 @@ public class StorageManager
             public void onSuccess(final DirectoryEntry dirEntry)
             {
               logger.log(Level.INFO, "getLocalDirectoryEntry - Directory retrieved : " + directory);
+              lastLocalDirectory = directory;
+              lastLocalDirectoryEntry = dirEntry;
               if (callback != null)
               {
                 callback.onSuccess(dirEntry);
@@ -1031,7 +1035,7 @@ public class StorageManager
    *          "http://host.domain.ch/testapp/storage/v1/"
    * @param item
    * @param callback is called once the asynch action completed or failed
-   * @return false if the asynchronous action invocation failed.
+   * @return false if the asynchronous action invocation failed and no callback will be invoked
    */
   public boolean readStorageItemFromUrl(String url, final StorageItem item, final Callback<StorageItem, StorageError> callback)
   {
@@ -1123,9 +1127,7 @@ public class StorageManager
    *          itself.
    * @param version Check if the version of the stored resource equals. Not
    *          checked if version=0
-   * @return The full url where the resource must be retrieved from (either
-   *         points to the home server of the application as configured or it
-   *         points to the found local cached resource file.
+   * @return true if the retrieval was invoked successfully, means you could expect a callback, false otherwise.
    */
   public boolean retrieveResourceUrl(final String relativeUrl, Integer version, final Callback<String, FileError> callback)
   {
@@ -1151,7 +1153,7 @@ public class StorageManager
       }
       // check if we have a cached resource (eg. with a corresponding cache item
       // in the storage)
-      StorageResource resource = new StorageResource(relativeUrl, version);
+      StorageResource resource = new StorageResource(relativeUrl, version, null);
       Boolean checkVersion = checkResourceVersion(resource);
       if (checkVersion == null)
       {
@@ -1197,6 +1199,8 @@ public class StorageManager
     return false;
   }
 
+  
+  private static String CACHEFILEPATHDELIMITER = "@@";
   /**
    * Create from a url a proper filename which could be stored in the filesystem
    * 
@@ -1204,96 +1208,25 @@ public class StorageManager
    * @return The filename with all problematic characters replaced with working
    *         ones.
    */
-  private String convertFilePathToFileName(String filePath)
+  public static String convertFilePathToFileName(String filePath)
   {
-    return filePath.replace("/", "@@");
+    return filePath.replace("/", CACHEFILEPATHDELIMITER);
   }
 
-  /**
-   * Download the given resource url and store it in the local cache Directory.
-   * 
-   * @param resource
-   * @param destinationDir The URL of the destination Directoy
-   */
-  private void downloadCacheResource(final StorageResource resource)
+  public static String extractFileNameFromCacheFile(String cachedFileName)
   {
     try
     {
-      if (resource == null) return;
-      logger.log(Level.INFO, "downloadCacheResource " + resource.getResourceUrl() + " Version:" + resource.getVersion());
-      getCacheDirectoryEntry(new Callback<DirectoryEntry, StorageError>()
+      int pos = cachedFileName.indexOf(CACHEFILEPATHDELIMITER);
+      if (pos>=0)
       {
-        public void onSuccess(DirectoryEntry cacheDir)
-        {
-          try
-          {
-            FileTransfer fileTransfer = phonegap.getFile().createFileTransfer();
-            String localFileName = convertFilePathToFileName(resource.getResourceUrl());
-            String sourceUrl = getRemoteAppBaseUrl() + resource.getResourceUrl();
-            String destUrl = cacheDir.toURL() + localFileName;
-            // String destUrl =
-            // "cdvfile://localhost/persistent/testapp/test.mp4";
-            logger.log(Level.INFO, "downloadResource invoked for : " + sourceUrl + " to : " + destUrl);
-            fileTransfer.download(sourceUrl, destUrl, getResourceDownloadHandler(resource));
-          } catch (Exception lex)
-          {
-            logger.log(Level.SEVERE, "Exception in downloadCacheResource success handler", lex);
-          }
-        }
-
-        public void onFailure(StorageError error)
-        {
-          logger.log(Level.WARNING, "Failed to download CacheResource for : " + resource.getResourceUrl());
-        }
-      });
-    } catch (Exception ex)
+        return cachedFileName.substring(pos+2);
+      }
+    }catch(Exception ex)
     {
-      logger.log(Level.SEVERE, "Exception resourceDownload for : " + resource.getResourceUrl(), ex);
+      //
     }
-  }
-
-  /**
-   * Creates and returns a Callback which treats the result for a url resource
-   * retrieval The just downloaded resource is registered in the local storage
-   * with the version for future cache handling
-   * 
-   * @return The callback which deals with the asynch result of the remote
-   *         resource retrieval
-   */
-  private FileDownloadCallback getResourceDownloadHandler(final StorageResource resource)
-  {
-    return new FileDownloadCallback()
-    {
-      public void onSuccess(FileEntry fileEntry)
-      {
-        try
-        {
-          logger.log(Level.INFO, "FileDownload success " + fileEntry.getFullPath() + " for resource=" + resource.getResourceUrl() + " version=" + resource.getVersion());
-          // register now in the storage the version for the cache checks in the
-          // future
-          getLocalStorage().setItem(resource.getResourceIdKey(), fileEntry.toURL());
-          getLocalStorage().setItem(resource.getResourceVersionKey(), resource.getVersion().toString());
-          downloadInProgress = false;
-          checkNextCacheResource();
-        } catch (Exception lex)
-        {
-          logger.log(Level.SEVERE, "Exception on cacheResource download success handler", lex);
-        }
-      }
-
-      public void onProgress(FileTransferProgressEvent progress)
-      {
-        // logger.log(Level.INFO,"FileDownload Progress " +
-        // progress.getLoadedBytes());
-      }
-
-      public void onFailure(FileTransferError error)
-      {
-        logger.log(Level.SEVERE, "FileDownload Failure " + error.toString() + " : " + resource.getResourceUrl());
-        downloadInProgress = false;
-        checkNextCacheResource();
-      }
-    };
+    return cachedFileName;
   }
 
   /**
@@ -1303,7 +1236,7 @@ public class StorageManager
    * @return true if the version matches the cache, false if not. If there was
    *         no cache yet, returns null
    */
-  public Boolean checkResourceVersion(StorageResource resource)
+  protected Boolean checkResourceVersion(StorageResource resource)
   {
     try
     {
@@ -1401,11 +1334,9 @@ public class StorageManager
     }
   }
 
-  private List<StorageResource> cacheResourceQueue = new ArrayList<StorageResource>();
-  private boolean downloadInProgress = false;
   private DirectoryEntry cacheDirectoryEntry = null;
 
-  private boolean getCacheDirectoryEntry(final Callback<DirectoryEntry, StorageError> callback)
+  public boolean getCacheDirectoryEntry(final Callback<DirectoryEntry, StorageError> callback)
   {
     try
     {
@@ -1449,94 +1380,34 @@ public class StorageManager
     return false;
   }
 
-  /**
-   * Check if there are further resources to be downloaded into the cache
-   * 
-   * Note: GWT compiler will ignore the synchronized here, I leave it to show
-   * that we take care about. As JS is single threaded, there won't be any
-   * concurrency issues anyhow, so we don't have to take any more special
-   * actions.
-   */
-  private synchronized void checkNextCacheResource()
-  {
-    try
-    {
-      if (downloadInProgress) return;
-      if (cacheResourceQueue.size() > 0)
-      {
-        downloadInProgress = true;
-        StorageResource next = cacheResourceQueue.remove(0);
-        downloadCacheResource(next);
-      }
-    } catch (Exception ex)
-    {
-      logger.log(Level.SEVERE, "Failure Downloading Cache Resource", ex);
-    } finally
-    {
-      downloadInProgress = false;
-    }
-  }
 
   /**
    * Check first if the resource with the given url and version is already
    * present, if not try to download the same in a sequential way asynchronously
    * 
-   * @param relativeUrl
-   * @param version
+   * @param relativeUrl The relative url to the resource from the apps base path
+   * @param version The requested resource version
+   * @param callback Callback called once the resource was downloaded / or is available local at all
+   * @return false if no resource retrieval is invoked really and therefore, no downloadNotification callback will happen.
    */
-  public void addResourceToCache(final String relativeUrl, final Integer version)
+  public boolean addResourceToCache(final String relativeUrl, final Integer version, final FileDownloadCallback downloadNotification)
   {
     try
     {
-      if (!this.isResourceCachingEnabled()) return;
-      if (relativeUrl == null || relativeUrl.isEmpty()) return;
-      // check if we have it already in the cache with the right version
-      StorageResource resource = new StorageResource(relativeUrl, version);
-      Boolean versionCheck = checkResourceVersion(resource);
-      if (versionCheck == null)
-      {
-        logger.log(Level.WARNING, "ResourceCacheReference retrieval no chache entry found : " + relativeUrl + " requestedVersion:" + version + " -> invoke loading");
-      } else if (versionCheck == true)
-      {
-        // it should be there already and version is ok
-        logger.log(Level.INFO, "Successful ResourceCacheReference retrieval : " + relativeUrl);
-        // check if it really exists but asynch
-        String fileName = convertFilePathToFileName(relativeUrl);
-        this.getLocalFileReference(getCacheDirectory(), fileName, false, new FileCallback<FileEntry, StorageError>()
-        {
-          @Override
-          public void onSuccess(FileEntry entry)
-          {
-            logger.log(Level.INFO, "Successful ResourceCacheFile retrieval : " + relativeUrl);
-            // the cache is ok, file is there in right version, we don't have to
-            // do something really.
-          }
-
-          @Override
-          public void onFailure(StorageError error)
-          {
-            logger.log(Level.SEVERE, "Failure ResourceCacheReference retrieval : " + relativeUrl + " : " + error.toString());
-            // nothing found, we must try to download again
-            // add it to the list of downloadable cache entries
-            cacheResourceQueue.add(new StorageResource(relativeUrl, version));
-            checkNextCacheResource();
-          }
-        });
-        return;
-      } else if (versionCheck == false)
-      {
-        // version doesn't match, invoke reload
-        logger.log(Level.WARNING, "ResourceCacheReference retrieval version mismatch : " + relativeUrl + " requestedVersion:" + version + " -> invoke loading");
-      }
-      // add it to the list of downloadable cache entries
-      cacheResourceQueue.add(new StorageResource(relativeUrl, version));
-      checkNextCacheResource();
-    } catch (Exception ex)
+      if (!this.isResourceCachingEnabled()) return false;
+      if (relativeUrl == null || relativeUrl.isEmpty()) return false;
+      StorageResource resource = new StorageResource(relativeUrl, version, downloadNotification);
+      StorageResourceCollector collector = new StorageResourceCollector(this,resource);
+      Scheduler.get().scheduleDeferred(collector);
+      return true;
+    }catch(Exception ex)
     {
-      logger.log(Level.SEVERE, "Exception addingResourceToCache", ex);
+      logger.log(Level.SEVERE, "Exception adding ResourceToCache", ex);
     }
+    return false;
   }
-
+  
+  
   /**
    * Clear all cached items - key/value pairs in the LocalStorage - Related
    * files in the cache directory
@@ -1551,7 +1422,6 @@ public class StorageManager
     {
       logger.log(Level.SEVERE, "Exception on Cache clearing", ex);
     }
-
   }
 
   /**
@@ -1562,6 +1432,7 @@ public class StorageManager
    */
   public int getAllCachedResourceItems(final Callback<StorageInfo, FileError> callback)
   {
+    int resCtr=0;
     try
     {
       if (!this.isResourceCachingEnabled()) return 0;
@@ -1569,16 +1440,15 @@ public class StorageManager
       logger.log(Level.INFO, "getAllCachedResourceItems");
       Storage storage = this.getLocalStorage();
       int len = storage.getLength();
-      int resCtr = 0;
       for (int i = 0; i < len; i++)
       {
         String key = storage.key(i);
         if (StorageResource.isResourceIdKey(key))
         {
           logger.log(Level.INFO, "Read cached Resource : " + key);
+          StorageInfoCollector collector = new StorageInfoCollector(this,key,callback);
+          Scheduler.get().scheduleDeferred(collector);
           resCtr++;
-          StorageInfoCollector collector = new StorageInfoCollector(key, callback);
-          collector.collectInfo();
         }
       }
       return resCtr;
@@ -1586,124 +1456,8 @@ public class StorageManager
     {
       logger.log(Level.SEVERE, "Execption reading all cached Resources", ex);
     }
-    return 0;
+    return resCtr;
   }
 
-  private class StorageInfoCollector
-  {
-
-    private String storageKey;
-    private String version;
-    private String fileName;
-    private String filePath;
-    private String fileUrl;
-    private Long fileSize;
-    private Date lastModificationDate;
-    private Callback<StorageInfo, FileError> callback;
-    private FileEntry fileEntry;
-
-    public StorageInfoCollector(String storageKey, Callback<StorageInfo, FileError> callback)
-    {
-      this.storageKey = storageKey;
-      this.callback = callback;
-    }
-
-    private String logBaseInfo()
-    {
-      return "CollectInfo : " + storageKey + " / ";
-    }
-
-    private void collectInfo()
-    {
-      Storage storage = getLocalStorage();
-      String versionKey = StorageResource.getResourceVersionKey(storageKey);
-      version = storage.getItem(versionKey);
-      fileUrl = storage.getItem(storageKey);
-      // now resolve the file asynch
-      phonegap.getFile().resolveLocalFileSystemURI(fileUrl, new FileCallback<EntryBase, FileError>()
-      {
-        @Override
-        public void onSuccess(EntryBase entry)
-        {
-          logger.log(Level.INFO, logBaseInfo() + "ResolveLocalFileSystemUri success");
-          fileEntry = entry.getAsFileEntry();
-          fileEntry.getFile(new FileCallback<FileObject, FileError>()
-          {
-            @Override
-            public void onSuccess(FileObject entry)
-            {
-              logger.log(Level.INFO, logBaseInfo() + "FileEntry located : " + entry.getFullPath() + " name:" + entry.getName());
-              fileName = entry.getName();
-              filePath = entry.getFullPath();
-              fileSize = entry.size();
-              try
-              { // might throw an exception (unknown method in Phonegap .....
-                // lastModificationDate = entry.getLastModifiedDate(); -> take
-                // it from Metadata instead
-              } catch (Exception ex)
-              {
-                logger.log(Level.FINEST, logBaseInfo() + "Failure in File Modification Date evaluation", ex);
-              }
-              fileEntry.getMetadata(new FileCallback<Metadata, FileError>()
-              {
-                @Override
-                public void onSuccess(Metadata metadata)
-                {
-                  logger.log(Level.INFO, logBaseInfo() + "Successful FileMetadata located");
-                  try
-                  {
-                    lastModificationDate = metadata.getModificationTime();
-                  } catch (Exception ex)
-                  {
-                    logger.log(Level.FINEST, logBaseInfo() + "Failure in Metadata Modification Date evaluation", ex);
-                  }
-                  invokeSuccessCallback();
-                }
-
-                @Override
-                public void onFailure(FileError error)
-                {
-                  logger.log(Level.WARNING, logBaseInfo() + "Failure cache FileEntry Metadata retrieval with error : " + error.toString());
-                  // anyhow signal success even if we don't have the Metadata
-                  invokeSuccessCallback();
-                }
-              });
-            }
-
-            @Override
-            public void onFailure(FileError error)
-            {
-              logger.log(Level.SEVERE, logBaseInfo() + "Failure cache FileEntry info retrieval with error : " + error.toString());
-              callback.onFailure(error);
-            }
-          });
-        }
-
-        @Override
-        public void onFailure(FileError error)
-        {
-          logger.log(Level.WARNING, logBaseInfo() + "Unable to locate cache File information with error : " + error.getErrorCode());
-          if (callback != null)
-          {
-            callback.onFailure(error);
-          }
-        }
-      });
-    }
-
-    private void invokeSuccessCallback()
-    {
-      StorageInfo info = new StorageInfo();
-      info.setFileName(this.fileName);
-      info.setFilePath(filePath);
-      info.setFileUrl(fileUrl);
-      info.setFileSize(fileSize);
-      info.setLastModificationDate(lastModificationDate);
-      info.setStorageKey(storageKey);
-      info.setVersion(version);
-      callback.onSuccess(info);
-    }
-
-  }
 
 }
