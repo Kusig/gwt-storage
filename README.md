@@ -11,7 +11,7 @@ It's main goal is to provide a local cache system for multimedia files used with
 <dependency>
     <groupId>ch.gbrain</groupId>
     <artifactId>gwt-storage</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
 </dependency>    
 ```
 
