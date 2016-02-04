@@ -17,7 +17,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>ch.gbrain</groupId>
 	<artifactId>gwt-storage</artifactId>
-	<version>0.0.2-SNAPSHOT</version>
+	<version>0.0.2</version>
 
 	<properties>
 		<!-- Convenience property to set the GWT version -->
